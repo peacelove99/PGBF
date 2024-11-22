@@ -33,6 +33,52 @@ class SubsetSequentialSampler(Sampler):
     def __len__(self):
         return len(self.indices)
 
+def OGM_GE(args, epoch, model, h_path, h_omic):
+    relu = nn.ReLU(inplace=True)
+    tanh = nn.Tanh()
+
+    logits_path = model.classifier(h_path).unsqueeze(0)
+    logits_omic = model.classifier(h_omic).unsqueeze(0)
+
+    hazards_path = torch.sigmoid(logits_path)
+    hazards_omic = torch.sigmoid(logits_omic)
+
+    score_path = hazards_path/hazards_omic
+    score_omic = 1 / score_path
+    print('score_path:', score_path)
+    print('score_omic:', score_omic)
+
+    ratio_path = score_path / score_omic
+    ratio_omic = 1 / ratio_path
+    print('ratio_path:', ratio_path)
+    print('ratio_omic:', ratio_omic)
+
+    if ratio_path > 1:
+        coeff_path = 1 - tanh(args.alpha * relu(ratio_path))
+        coeff_omic = 1
+    else:
+        coeff_omic = 1 - tanh(args.alpha * relu(ratio_omic))
+        coeff_path = 1
+
+    if args.modulation_starts <= epoch <= args.modulation_ends:
+        for name, parms in model.named_parameters():
+            print('name:', name)
+            layer = str(name).split('.')[1]
+
+            if 'wsi' in layer and len(parms.grad.size()) == 4:
+                if args.modulation == 'OGM_GE':
+                    parms.grad = parms.grad * coeff_path + torch.zeros_like(parms.grad).normal_(0, parms.grad.std().item() + 1e-8)
+                elif args.modulation == 'OGM':
+                    parms.grad *= coeff_path
+
+            if 'sig' in layer and len(parms.grad.size()) == 4:
+                if args.modulation == 'OGM_GE':
+                    parms.grad = parms.grad * coeff_omic + torch.zeros_like(parms.grad).normal_(0, parms.grad.std().item() + 1e-8)
+                elif args.modulation == 'OGM':
+                    parms.grad *= coeff_omic
+    else:
+        pass
+
 def collate_MIL(batch):
     img = torch.cat([item[0] for item in batch], dim = 0)
     label = torch.LongTensor([item[1] for item in batch])

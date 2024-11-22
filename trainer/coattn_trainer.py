@@ -4,6 +4,8 @@ import torch
 import os
 from sksurv.metrics import concordance_index_censored
 
+from utils.utils import OGM_GE
+
 
 def train_loop_survival_coattn(epoch, model, loader, optimizer, n_classes, writer=None, loss_fn=None, reg_fn=None, lambda_reg=0., gc=16, args=None):   
     device=torch.device("cuda" if torch.cuda.is_available() else "cpu") 
@@ -27,7 +29,7 @@ def train_loop_survival_coattn(epoch, model, loader, optimizer, n_classes, write
         label = label.type(torch.LongTensor).to(device)
         c = c.type(torch.FloatTensor).to(device)
 
-        hazards, S, Y_hat, A  = model(x_path=data_WSI, x_omic1=data_omic1, x_omic2=data_omic2, x_omic3=data_omic3, x_omic4=data_omic4, x_omic5=data_omic5, x_omic6=data_omic6)
+        hazards, S, Y_hat, A, h_path, h_omic  = model(x_path=data_WSI, x_omic1=data_omic1, x_omic2=data_omic2, x_omic3=data_omic3, x_omic4=data_omic4, x_omic5=data_omic5, x_omic6=data_omic6)
         loss = loss_fn(hazards=hazards, S=S, Y=label, c=c)
         loss_value = loss.item()
 
@@ -53,6 +55,8 @@ def train_loop_survival_coattn(epoch, model, loader, optimizer, n_classes, write
             print(train_batch_str)
         loss = loss / gc + loss_reg
         loss.backward()
+
+        OGM_GE(args, epoch, model, h_path, h_omic)
 
         if (batch_idx + 1) % gc == 0: 
             optimizer.step()

@@ -164,6 +164,10 @@ def train(datasets: tuple, cur: int, args: Namespace):
         from models.model_motcat import MOTCAT_Surv
         model_dict = {'ot_reg': args.ot_reg, 'ot_tau': args.ot_tau, 'ot_impl': args.ot_impl,'fusion': args.fusion, 'omic_sizes': args.omic_sizes, 'n_classes': args.n_classes}
         model = MOTCAT_Surv(**model_dict)
+    elif args.model_type == 'pgbf':
+        from models.model_pgbf import PGBF_Surv
+        model_dict = {'ot_reg': args.ot_reg, 'ot_tau': args.ot_tau, 'ot_impl': args.ot_impl,'fusion': args.fusion, 'omic_sizes': args.omic_sizes, 'n_classes': args.n_classes}
+        model = PGBF_Surv(**model_dict)
     else:
         raise NotImplementedError
     
