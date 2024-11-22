@@ -43,15 +43,21 @@ def OGM_GE(args, epoch, model, h_path, h_omic):
     hazards_path = torch.sigmoid(logits_path)
     hazards_omic = torch.sigmoid(logits_omic)
 
-    score_path = hazards_path/hazards_omic
+    S_path = torch.cumprod(1 - hazards_path, dim=1)
+    S_omic = torch.cumprod(1 - hazards_omic, dim=1)
+
+    risk_path = torch.sum(S_path, dim=1).detach()
+    risk_omic = torch.sum(S_omic, dim=1).detach()
+
+    score_path = risk_path/risk_omic
     score_omic = 1 / score_path
-    print('score_path:', score_path)
-    print('score_omic:', score_omic)
+    # print('score_path:', score_path)
+    # print('score_omic:', score_omic)
 
     ratio_path = score_path / score_omic
     ratio_omic = 1 / ratio_path
-    print('ratio_path:', ratio_path)
-    print('ratio_omic:', ratio_omic)
+    # print('ratio_path:', ratio_path)
+    # print('ratio_omic:', ratio_omic)
 
     if ratio_path > 1:
         coeff_path = 1 - tanh(args.alpha * relu(ratio_path))
@@ -375,6 +381,8 @@ def get_custom_exp_code(args):
       param_code += 'MCAT'
     elif args.model_type == 'motcat':
       param_code += 'MOTCAT'
+    elif args.model_type == 'pgbf':
+      param_code += 'PGBF'
     else:
       raise NotImplementedError
 

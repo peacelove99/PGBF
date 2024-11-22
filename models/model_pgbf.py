@@ -90,7 +90,7 @@ class ConcatFusion(nn.Module):
         return x, y, output
        
 #############################
-### MOTCAT Implementation ###
+### PGBF Implementation ###
 #############################
 class PGBF_Surv(nn.Module):
     def __init__(self, fusion='concat', omic_sizes=[100, 200, 300, 400, 500, 600], n_classes=4,
@@ -137,8 +137,8 @@ class PGBF_Surv(nn.Module):
         
         ### Fusion Layer
         if self.fusion == 'concat':
-            # self.mm = nn.Sequential(*[nn.Linear(256*2, size[2]), nn.ReLU(), nn.Linear(size[2], size[2]), nn.ReLU()])
-            self.mm = ConcatFusion(input_dim=256*2, output_dim=size[2])
+            self.mm = nn.Sequential(*[nn.Linear(256*2, size[2]), nn.ReLU(), nn.Linear(size[2], size[2]), nn.ReLU()])
+            # self.mm = ConcatFusion(input_dim=256*2, output_dim=size[2])
         elif self.fusion == 'bilinear':
             self.mm = BilinearFusion(dim1=256, dim2=256, scale_dim1=8, scale_dim2=8, mmhid=256)
         else:
@@ -177,8 +177,7 @@ class PGBF_Surv(nn.Module):
         if self.fusion == 'bilinear':
             h = self.mm(h_path.unsqueeze(dim=0), h_omic.unsqueeze(dim=0)).squeeze()
         elif self.fusion == 'concat':
-            # h = self.mm(torch.cat([h_path, h_omic], axis=0))
-            h_path, h_omic, h = self.mm(torch.cat([h_path, h_omic], axis=0))
+            h = self.mm(torch.cat([h_path, h_omic], axis=0))
 
         ### Survival Layer
         logits = self.classifier(h).unsqueeze(0)

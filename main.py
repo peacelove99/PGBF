@@ -50,7 +50,7 @@ parser.add_argument('--start_epoch',              type=int,
                     default=0, help='start_epoch.')
 
 ### Model Parameters.
-parser.add_argument('--model_type',      type=str, choices=['snn', 'amil', 'mcat', 'motcat'], 
+parser.add_argument('--model_type',      type=str, choices=['snn', 'amil', 'mcat', 'motcat', 'pgbf'],
                     default='motcat', help='Type of model (Default: motcat)')
 parser.add_argument('--mode',            type=str, choices=['omic', 'path', 'pathomic', 'cluster', 'coattn'],
                     default='coattn', help='Specifies which modalities to use / collate function in dataloader.')
@@ -78,8 +78,8 @@ parser.add_argument('--max_epochs',      type=int, default=20,
                     help='Maximum number of epochs to train (default: 20)')
 parser.add_argument('--lr',				 type=float, default=2e-4,
                     help='Learning rate (default: 0.0002)')
-parser.add_argument('--bag_loss',        type=str, choices=['svm', 'ce', 'ce_surv', 'nll_surv',
-                    'cox_surv'], default='nll_surv', help='slide-level classification loss function (default: nll_surv)')
+parser.add_argument('--bag_loss', type=str, choices=['svm', 'ce', 'ce_surv', 'nll_surv', 'cox_surv'],
+                    default='nll_surv', help='slide-level classification loss function (default: nll_surv)')
 parser.add_argument('--label_frac',      type=float, default=1.0,
                     help='fraction of training labels (default: 1.0)')
 parser.add_argument('--bag_weight',      type=float, default=0.7,
@@ -108,6 +108,15 @@ parser.add_argument('--ot_reg', 			 type=float, default=0.1,
                     help='epsilon of OT (default: 0.1)')
 parser.add_argument('--ot_tau', 			 type=float, default=0.5,
                     help='tau of UOT (default: 0.5)')
+
+parser.add_argument('--modulation', type=str,
+                    default='OGM_GE', choices=['Normal', 'OGM', 'OGM_GE'])
+parser.add_argument('--modulation_starts', type=int,
+                    default=5, help=' ')
+parser.add_argument('--modulation_ends', type=int,
+                    default=15, help=' ')
+parser.add_argument('--alpha', type=float,
+                    default=0.1, help=' ')
 
 args = parser.parse_args()
 device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
