@@ -193,7 +193,7 @@ def train(datasets: tuple, cur: int, args: Namespace):
 
     print('\nSetup EarlyStopping...', end=' ')
     if args.early_stopping:
-        early_stopping = EarlyStopping(warmup=0, patience=10, stop_epoch=20, verbose = True)
+        early_stopping = EarlyStopping(warmup=0, patience=10, stop_epoch=30, verbose = True)
     else:
         early_stopping = None
     

@@ -67,21 +67,26 @@ def OGM_GE(args, epoch, model, h_path, h_omic):
         coeff_path = 1
 
     if args.modulation_starts <= epoch <= args.modulation_ends:
+        # print("**************************************")
         for name, parms in model.named_parameters():
-            print('name:', name)
-            layer = str(name).split('.')[1]
+            # print("len(parms.grad.size()):",len(parms.grad.size()))
 
-            if 'wsi' in layer and len(parms.grad.size()) == 4:
+            # if 'path_rho' in name and len(parms.grad.size()) == 4:
+            if 'path_rho' in name:
+                # print("start path OGM_GE")
                 if args.modulation == 'OGM_GE':
                     parms.grad = parms.grad * coeff_path + torch.zeros_like(parms.grad).normal_(0, parms.grad.std().item() + 1e-8)
                 elif args.modulation == 'OGM':
                     parms.grad *= coeff_path
 
-            if 'sig' in layer and len(parms.grad.size()) == 4:
+            # if 'omic_rho' in name and len(parms.grad.size()) == 4:
+            if 'omic_rho' in name:
+                # print("start omic OGM_GE")
                 if args.modulation == 'OGM_GE':
                     parms.grad = parms.grad * coeff_omic + torch.zeros_like(parms.grad).normal_(0, parms.grad.std().item() + 1e-8)
                 elif args.modulation == 'OGM':
                     parms.grad *= coeff_omic
+        # print("**************************************")
     else:
         pass
 

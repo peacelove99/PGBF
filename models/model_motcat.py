@@ -174,4 +174,4 @@ class MOTCAT_Surv(nn.Module):
         
         attention_scores = {'coattn': A_coattn, 'path': A_path, 'omic': A_omic}
         
-        return hazards, S, Y_hat, attention_scores
+        return hazards, S, Y_hat, h_path, h_omic, attention_scores
