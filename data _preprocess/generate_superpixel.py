@@ -1,3 +1,5 @@
+# https://github.com/Baeksweety/superpixel_transformer/blob/main/data_preprocess/generate_superpixel.py
+
 import os
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "2"
