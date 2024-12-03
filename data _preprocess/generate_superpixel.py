@@ -1,8 +1,9 @@
 # https://github.com/Baeksweety/superpixel_transformer/blob/main/data_preprocess/generate_superpixel.py
 
 import os
+import sys
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import torch
 import torch.nn as nn
 from tqdm import tqdm
@@ -83,25 +84,26 @@ def generate_superpixel(image_path, downsampling_factor):
     # than 144x144, several patches are extracted and patch embeddings are averaged.
     # Everything is handled internally. Please refer to the implementation for
     # details.
-    feature_extractor = DeepFeatureExtractor(
-        architecture='resnet34',
-        patch_size=144,
-        resize_size=224
-    )
+    # feature_extractor = DeepFeatureExtractor(
+    #     architecture='resnet34',
+    #     patch_size=144,
+    #     resize_size=224
+    # )
 
     # 4. define graph builder
-    tissue_graph_builder = RAGGraphBuilder(add_loc_feats=True)
+    # tissue_graph_builder = RAGGraphBuilder(add_loc_feats=True)
 
     # 5. define graph visualizer
-    visualizer = OverlayGraphVisualization()
+    # visualizer = OverlayGraphVisualization()
 
-    _, image_name = os.path.split(image_path)
+    # _, image_name = os.path.split(image_path)
     image = Image.open(image_path)
     image = np.array(image)
-    fname = image_name[:-4] + '.png'
-    print(image.shape)
+    # fname = image_name[:-4] + '.png'
+    print('image.shape:', image.shape)
 
     superpixels, _ = superpixel_detector.process(image)
+    print('superpixels.shape1:',superpixels.shape)
     superpixels = get_node_centroids(superpixels, image)
     return superpixels
 
@@ -239,12 +241,13 @@ def patch_judge_40x(stitch_path, saved_path):
 
 
 def patch_judge_20x(stitch_path, saved_path):
-    _, image_name = os.path.split(stitch_path)
-    name = image_name[:-4]
+    _, image_name = os.path.split(stitch_path) # image_name: TCGA-75-7025-01Z-00-DX1.284477D7-4F47-4084-A15C-0A7E9571E3DF.jpg
+    name = image_name[:-4] # name: TCGA-75-7025-01Z-00-DX1.284477D7-4F47-4084-A15C-0A7E9571E3DF
     superpixels = generate_superpixel(stitch_path, downsampling_factor=2)
-    print(superpixels.shape)
+    print('superpixels.shape:',superpixels.shape)
     h, w = superpixels.shape
-    slide_info_path = '/data12/ybj/survival/CRC/20x/slides_feat/h5_files/' + name + '.h5'
+    print('h:',h,';w:',w)
+    slide_info_path = '/home/cvnlp/WSI_DATA/TCGA_LUAD_feature/h5_files/' + name + '.h5'
     f = h5py.File(slide_info_path)
     new_slide_info = []
     new_slide_info_path = saved_path + name + '.pth'
@@ -256,10 +259,12 @@ def patch_judge_20x(stitch_path, saved_path):
         patch_info['features'] = f['features'][i]
         patch_coords = f['coords'][i]
         x, y = patch_coords
+        print('y1:',y,'x1:',x)
         x = x + 256
         y = y + 256
         x = int(x / 16)
         y = int(y / 16)
+        print('y2:',y,'x2:',x)
         if (y < h) & (x < w):
             patch_info['superpixel'] = superpixels[y][x]
         elif (y >= h) & (x < w):
@@ -268,13 +273,16 @@ def patch_judge_20x(stitch_path, saved_path):
             y_n = y_n + (h * 16 - y_n) / 2
             x_n = int(x_n / 16)
             y_n = int(y_n / 16)
+            print('y_n:',y_n,'x_n:',x_n)
             patch_info['superpixel'] = superpixels[y_n][x_n]
         elif (y < h) & (x >= w):
             x_n, y_n = f['coords'][i]
+            print('y_n:',y_n,'x_n:',x_n)
             x_n = x_n + (w * 16 - x_n) / 2
             y_n = y_n + 256
             x_n = int(x_n / 16)
             y_n = int(y_n / 16)
+            print('y_n:',y_n,'x_n:',x_n)
             patch_info['superpixel'] = superpixels[y_n][x_n]
         else:
             x_n, y_n = f['coords'][i]
@@ -282,12 +290,13 @@ def patch_judge_20x(stitch_path, saved_path):
             y_n = y_n + (h * 16 - y_n) / 2
             x_n = int(x_n / 16)
             y_n = int(y_n / 16)
+            print('y_n:',y_n,'x_n:',x_n)
             patch_info['superpixel'] = superpixels[y_n][x_n]
+
         new_slide_info.append(patch_info)
     superpixel_patchnum = {}
     max_superpixel = get_max_value(superpixels)
-    #     print(max(superpixel))
-    print(max_superpixel)
+    print('max_superpixel', max_superpixel)
     for sup_value in range(1, max_superpixel + 1):
         #             print(sup_value)
         coords_s = []
@@ -356,42 +365,50 @@ def generate_tissue_graph(slide_list_path, image_path, saved_path, graph_file_sa
     visualizer = OverlayGraphVisualization()
 
     # 6. extract superpixels
-    slide_list = joblib.load(slide_list_path)
-    # slide_x, _ = os.path.splitext(slide_list_path)
+    print("slide_list_path:", slide_list_path) #  slide_list_path: /home/cvnlp/WSI_DATA/TCGA_LUAD/slide_20x_List.pkl
     _, slide_x = os.path.split(slide_list_path)
-    print(slide_list_path)
-    print(slide_x)
-    slide_x = slide_x.split('_')[1]
-    print(slide_x)
-    #     for slidename in os.listdir(image_path):
+    slide_x = slide_x.split('_')[1] #  slide_x: 20x
+    print("slide_x:", slide_x)
+    slide_list = joblib.load(slide_list_path) # slide_list: ['./20x/xxx.svs',...]
+    # print("slide_list:", slide_list)
     for index in range(len(slide_list)):
-        slidename = slide_list[index]
-        name, _ = os.path.splitext(slidename)
-        #         print(name)
-        stitch_name = name + '.jpg'
+
+        # a. find right stitch
+        slidename = slide_list[index] #  slidename: './20x/TCGA-75-7025-01Z-00-DX1.284477D7-4F47-4084-A15C-0A7E9571E3DF.svs'
+        name, _ = os.path.splitext(slidename.split('/')[-1]) # name : TCGA-75-7025-01Z-00-DX1.284477D7-4F47-4084-A15C-0A7E9571E3DF
+        stitch_name = name + '.jpg' #  stitch_name = 'TCGA-75-7025-01Z-00-DX1.284477D7-4F47-4084-A15C-0A7E9571E3DF.jpg'
         stitch_path = os.path.join(image_path, stitch_name)
-        print(stitch_path)
+        print("stitch_path:", stitch_path)
+
+        # b.
+        print("start patch judge ",slide_x)
         if slide_x == '20x':
             superpixels = patch_judge_20x(stitch_path, saved_path)
         elif slide_x == '40x':
             superpixels = patch_judge_40x(stitch_path, saved_path)
         #     torch.save(superpixels,os.path.join('/data13/yanhe/miccai/super_pixel/superpixel_array/tcga_lihc_200superpixel',image_name[:-4]+'.pt'))
         #         print(image_name)
-        print(superpixels.shape)
-        #     print(superpixels)
+        print('superpixels.shape:', superpixels.shape)
+
         # c. extract deep features
         image = Image.open(stitch_path)
         features = feature_extractor.process(image, superpixels)
-        #     print(features.shape)
+        print('features.shape:', features.shape)
+
         # d. build a Region Adjacency Graph (RAG)
         #     graph = tissue_graph_builder.process(image, superpixels, features)
         graph = tissue_graph_builder.process(superpixels, features)
-        #     print(graph)
+        print('graph:', graph)
+
         # e. save the graph
-        torch.save(graph, os.path.join(graph_file_saved_path, slidename[:-4] + '.pt'))
+        # torch.save(graph, os.path.join(graph_file_saved_path, slidename[:-4] + '.pt'))
+        torch.save(graph, os.path.join(graph_file_saved_path, name + '.pt'))
+        print('graph saved in ', os.path.join(graph_file_saved_path, name + '.pt'))
+
         # f. visualize and save the graph
         canvas = visualizer.process(image, graph, instance_map=superpixels)
-        canvas.save(os.path.join(vis_saved_path, slidename[:-4] + '.png'))
+        canvas.save(os.path.join(vis_saved_path, name + '.png'))
+        print('visualize saved in ', os.path.join(vis_saved_path, name + '.png'))
 
 
 def main(args):
@@ -403,11 +420,13 @@ def main(args):
     os.makedirs(vis_saved_path, exist_ok=True)
 
     # 20x
+    print("start generate 20x tissue graph")
     slide_20x_path = args.slide_20x_path
     stitch_20x_path = args.stitch_20x_path
     generate_tissue_graph(slide_20x_path, stitch_20x_path, saved_path, graph_file_saved_path, vis_saved_path)
 
     # 40x
+    print("start generate 40x tissue graph")
     slide_40x_path = args.slide_40x_path
     stitch_40x_path = args.stitch_40x_path
     generate_tissue_graph(slide_40x_path, stitch_40x_path, saved_path, graph_file_saved_path, vis_saved_path)
@@ -417,19 +436,19 @@ def get_params():
     parser = argparse.ArgumentParser(description='superpixel_generate')
 
     parser.add_argument('--slide_40x_path', type=str,
-                        default='/data12/yanhe/miccai/data/tcga_crc/slide_40x_list.pkl')
+                        default='/home/cvnlp/WSI_DATA/TCGA_LUAD/slide_40x_list.pkl')
     parser.add_argument('--slide_20x_path', type=str,
-                        default='/data12/yanhe/miccai/data/tcga_crc/slide_20x_list.pkl')
+                        default='/home/cvnlp/WSI_DATA/TCGA_LUAD/slide_20x_List.pkl')
     parser.add_argument('--stitch_20x_path', type=str,
-                        default='/data12/ybj/survival/CRC/20x/stitches')
+                        default='/home/cvnlp/WSI_DATA/TCGA_LUAD_patches/stitches')
     parser.add_argument('--stitch_40x_path', type=str,
-                        default='/data12/ybj/survival/CRC/40x/stitches')
+                        default='/home/cvnlp/WSI_DATA/TCGA_LUAD_patches/stitches')
     parser.add_argument('--saved_path', type=str,
-                        default='/data11/yanhe/miccai/super_pixel/slide_superpixel/tcga_crc/superpixel_num_300/')
+                        default='/media/cvnlp/软件/YYP/super_pixel/slide_superpixel/TCGA_LUAD/superpixel_num_300/')
     parser.add_argument('--vis_saved_path', type=str,
-                        default='/data11/yanhe/miccai/super_pixel/vis/tcga_crc/superpixel_num_300')
+                        default='/media/cvnlp/软件/YYP/super_pixel/vis/TCGA_LUAD/superpixel_num_300')
     parser.add_argument('--graph_file_saved_path', type=str,
-                        default='/data11/yanhe/miccai/super_pixel/graph_file/tcga_crc/superpixel_num_300')
+                        default='/media/cvnlp/软件/YYP/super_pixel/graph_file/TCGA_LUAD/superpixel_num_300')
     parser.add_argument('--nr_superpixels', type=int,
                         default=300)
 
