@@ -104,7 +104,7 @@ class DeepZoomImageTiler(object):
             cols, rows = self._dz.level_tiles[level]
             for row in range(rows):
                 for col in range(cols):
-                    tilename = os.path.join(tiledir, '%d_%d.%s' % ( col, row, self._format))
+                    tilename = os.path.join(tiledir, '%d_%d.%s' % (col, row, self._format))
                     if not os.path.exists(tilename):
                         self._queue.put((self._associated, level, (col, row), tilename))
                     self._tile_done()
@@ -114,7 +114,8 @@ class DeepZoomImageTiler(object):
         self._processed += 1
         count, total = self._processed, self._dz.tile_count
         if count % 100 == 0 or count == total:
-            print("Tiling %s: wrote %d/%d tiles" % (self._associated or 'slide', count, total), end='\r', file=sys.stderr)
+            print("Tiling %s: wrote %d/%d tiles" % (self._associated or 'slide', count, total), end='\r',
+                  file=sys.stderr)
             if count == total:
                 print(file=sys.stderr)
 
@@ -231,10 +232,19 @@ def nested_patches(img_slide, out_base, level=(0,), ext='jpeg'):
             sys.stdout.write('\r Patch [%d/%d]' % (i + 1, len(low_patches)))
         print('Done.')
 
+
 def get_params():
     parser = argparse.ArgumentParser(description='Patch extraction for WSI')
+
+    parser.add_argument('--datadir', type=str,
+                        default='test', help='Dataset name')
+    parser.add_argument('--tempdir', type=str,
+                        default='test', help='')
+    parser.add_argument('--savedir', type=str,
+                        default='test', help='')
+
     parser.add_argument('-d', '--dataset', type=str,
-                        default='TCGA_LUAD/20x', help='Dataset name')
+                        default='test', help='Dataset name')
     parser.add_argument('-e', '--overlap', type=int,
                         default=0, help='Overlap of adjacent tiles [0]')
     parser.add_argument('-f', '--format', type=str,
@@ -259,32 +269,44 @@ def get_params():
     args, _ = parser.parse_known_args()
     return args
 
+
 if __name__ == '__main__':
     Image.MAX_IMAGE_PIXELS = None
     args = get_params()
 
     levels = tuple(args.magnifications)
-    assert len(levels) <= 2, 'Only 1 or 2 magnifications are supported!'
+    # assert len(levels) <= 2, 'Only 1 or 2 magnifications are supported!'
     # path_base = os.path.join('data', args.dataset)
-    path_base = os.path.join('/home/cvnlp/WSI_DATA', args.dataset)
-    print('path_base:',path_base)
+    # path_base = os.path.join('/home/cvnlp/WSI_DATA', args.dataset)
+    # print('path_base:', path_base)
 
-    if len(levels) == 2:
-        out_base = os.path.join('WSI', args.dataset, 'pyramid')
-    else:
-        out_base = os.path.join('/home/cvnlp/WSI_DATA/YYP', 'patches', args.dataset, 'patches_lv0_ps256')
-    print('out_base:',out_base)
+    # if len(levels) == 2:
+    #     out_base = os.path.join('WSI', args.dataset, 'pyramid')
+    # else:
+    #     out_base = os.path.join('/home/cvnlp/WSI_DATA/YYP', 'patches', args.dataset, 'patches_lv0_ps256')
+    # print('out_base:', out_base)
 
-    all_slides = (glob.glob(os.path.join(path_base, '*.' + args.slide_format)) +
-                  glob.glob(os.path.join(path_base, '*/*.' + args.slide_format)) +
-                  glob.glob(os.path.join(path_base, '*/*/*.' + args.slide_format)))
+    all_slides = (glob.glob(os.path.join(args.datadir, '*.' + args.slide_format)) +
+                  glob.glob(os.path.join(args.datadir, '*/*.' + args.slide_format)) +
+                  glob.glob(os.path.join(args.datadir, '*/*/*.' + args.slide_format)))
     print('len(all_slides):', len(all_slides))
     # pos-i_pos-j -> x, y
     for idx, c_slide in enumerate(all_slides):
         print('Process slide {}/{}:{}'.format(idx + 1, len(all_slides), c_slide.split('/')[-1]))
-        DeepZoomStaticTiler(c_slide, '/home/cvnlp/WSI_DATA/YYP/WSI_temp_1', levels, args.base_mag, args.objective, args.format,
-                            args.tile_size, args.overlap, True, args.quality, args.workers, args.background_t).run()
-        nested_patches(c_slide, out_base, levels)
+        DeepZoomStaticTiler(c_slide,  # slide 路径
+                            args.tempdir,  # 切片用的临时文件夹
+                            levels,  # 补丁的级别[0]
+                            args.base_mag,  # 最大放大倍率 [20]
+                            args.objective,  # 默认目标功率 [20]
+                            args.format,  # 切片图像格式 [jpeg］
+                            args.tile_size,  # 切片大小 [224］
+                            args.overlap,  # 切片重叠 [0]
+                            True,
+                            args.quality,  # 压缩质量 [70］
+                            args.workers,  # 工作进程数 [4]
+                            args.background_t  # 背景的阈值 [15］
+                            ).run()
+        nested_patches(c_slide, args.savedir, levels)
         try:
             print('delete WSI_temp_1_files')
             shutil.rmtree('/home/cvnlp/WSI_DATA/YYP/WSI_temp_1_files')
