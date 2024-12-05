@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
-# from torch_geometric.nn import global_mean_pool, global_max_pool, GlobalAttention
+from torch_geometric.nn import GlobalAttention
 
 import os
 
@@ -28,7 +28,7 @@ def SNN_Block(dim1, dim2, dropout=0.25):
 
 class PGBF(nn.Module):
     def __init__(self,
-                 model_size_omic: str = 'small', omic_sizes=[100, 200, 300, 400, 500, 600],
+                 model_size_omic: str = 'small', omic_sizes=[89, 334, 534, 471, 1510, 482],
                  dim_in=384, dim_hidden=512, topk=6, dropout=0.3):
         super(PGBF, self).__init__()
 
@@ -71,7 +71,7 @@ class PGBF(nn.Module):
         # 处理基因数据 生成omic的嵌入
         x_omic = [kwargs['x_omic%d' % i] for i in range(1, 7)]
         e_omic = [self.sig_networks[idx].forward(sig_feat) for idx, sig_feat in enumerate(x_omic)]
-        e_omic = torch.stack(e_omic).unsqueeze(1)
+        e_omic = torch.stack(e_omic).unsqueeze(1)  # [6, 1, 256]
 
         # 处理病理图像数据 生成graph的嵌入
         x_path = kwargs['x_path']
@@ -107,7 +107,7 @@ class PGBF(nn.Module):
         e_h = sum_embedding + bi_embedding
         # WiKG 公式 9 生成 graph-level 嵌入 embedding_graph
         e_h = self.message_dropout(e_h)
-        e_g = self.readout(e_h.squeeze(0), batch=None)
+        e_g = self.readout(e_h.squeeze(0), batch=None)  # [1, 512]
 
         return e_omic, e_g
 
@@ -126,13 +126,6 @@ if __name__ == "__main__":
     data_omic4 = data_omic4.type(torch.FloatTensor).to(device)
     data_omic5 = data_omic5.type(torch.FloatTensor).to(device)
     data_omic6 = data_omic6.type(torch.FloatTensor).to(device)
-    print('data_WSI.shape:', data_WSI.shape)
-    print('data_omic1.shape:', data_omic1.shape)
-    print('data_omic2.shape:', data_omic2.shape)
-    print('data_omic3.shape:', data_omic3.shape)
-    print('data_omic4.shape:', data_omic4.shape)
-    print('data_omic5.shape:', data_omic5.shape)
-    print('data_omic6.shape:', data_omic6.shape)
     model = PGBF().to(device)
     e_omic, e_g = model(x_path=data_WSI, x_omic1=data_omic1, x_omic2=data_omic2, x_omic3=data_omic3, x_omic4=data_omic4, x_omic5=data_omic5, x_omic6=data_omic6)
     print('e_omic_bag.shape:', e_omic.shape)

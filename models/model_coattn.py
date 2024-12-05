@@ -79,7 +79,7 @@ class MCAT_Surv(nn.Module):
         h_omic_bag = torch.stack(h_omic).unsqueeze(1) ### omic embeddings are stacked (to be used in co-attention)
         # print("h_omic_bag", h_omic_bag.shape)
 
-        # Coattn
+        # Coattn  h_path_bag：[3279, 1, 256] h_omic_bag:[6, 1, 256]
         h_path_coattn, A_coattn = self.coattn(h_omic_bag, h_path_bag, h_path_bag)
 
         ### Path
