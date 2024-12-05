@@ -33,9 +33,10 @@ class PGBF(nn.Module):
         super(PGBF, self).__init__()
 
         ### Constructing Genomic SNN
+        self.omic_sizes = omic_sizes
         self.size_dict_omic = {'small': [256, 256], 'big': [1024, 1024, 1024, 256]}
-        hidden = self.size_dict_omic[model_size_omic]  # 隐藏层大小
 
+        hidden = self.size_dict_omic[model_size_omic]  # 隐藏层大小
         sig_networks = []  # 存储所有处理基因的网络模块
         for input_dim in omic_sizes:  # omic_sizes=[100, 200, 300, 400, 500, 600]
             fc_omic = [SNN_Block(dim1=input_dim, dim2=hidden[0])]  # 第一层
