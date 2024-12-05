@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
-from torch_geometric.nn import global_mean_pool, global_max_pool, GlobalAttention
+# from torch_geometric.nn import global_mean_pool, global_max_pool, GlobalAttention
 
 import os
 
@@ -35,14 +35,17 @@ class PGBF(nn.Module):
         ### Constructing Genomic SNN
         self.size_dict_omic = {'small': [256, 256], 'big': [1024, 1024, 1024, 256]}
         hidden = self.size_dict_omic[model_size_omic]  # 隐藏层大小
+
         sig_networks = []  # 存储所有处理基因的网络模块
         for input_dim in omic_sizes:  # omic_sizes=[100, 200, 300, 400, 500, 600]
             fc_omic = [SNN_Block(dim1=input_dim, dim2=hidden[0])]  # 第一层
             for i, _ in enumerate(hidden[1:]):  # 遍历 hidden 中的后续维度，构建层与层之间的连接
                 fc_omic.append(SNN_Block(dim1=hidden[i], dim2=hidden[i + 1], dropout=0.25))
-            sig_networks.append(nn.Sequential(*fc_omic))  # 将该网络添加到 sig_networks
+            sig_networks.append(nn.Sequential(*fc_omic))  # 将网络 fc_omic 添加到 sig_networks
         self.sig_networks = nn.ModuleList(sig_networks)  # 存储多个神经网络模块
 
+
+        ### construct graph WiKG
         self._fc1 = nn.Sequential(nn.Linear(dim_in, dim_hidden), nn.LeakyReLU())
 
         self.W_head = nn.Linear(dim_hidden, dim_hidden)
@@ -62,15 +65,15 @@ class PGBF(nn.Module):
         att_net = nn.Sequential(nn.Linear(dim_hidden, dim_hidden // 2), nn.LeakyReLU(), nn.Linear(dim_hidden // 2, 1))
         self.readout = GlobalAttention(att_net)
 
-    def forward(self, x_path, **kwargs):
+    def forward(self, **kwargs):
 
-        # 处理基因数据 形成omic_bag的特征
-        # x_omic = [kwargs['x_omic%d' % i] for i in range(1, 7)]
-        # # each omic signature goes through it's own FC layer
-        # h_omic = [self.sig_networks[idx].forward(sig_feat) for idx, sig_feat in enumerate(x_omic)]
-        # h_omic_bag = torch.stack(h_omic).unsqueeze(1)
+        # 处理基因数据 生成omic的嵌入
+        x_omic = [kwargs['x_omic%d' % i] for i in range(1, 7)]
+        e_omic = [self.sig_networks[idx].forward(sig_feat) for idx, sig_feat in enumerate(x_omic)]
+        e_omic = torch.stack(e_omic).unsqueeze(1)
 
-
+        # 处理病理图像数据 生成graph的嵌入
+        x_path = kwargs['x_path']
         # WiKG 公式1 每个补丁的嵌入投影为头部和尾部嵌入
         x_path = self._fc1(x_path)  # 将维度从 dim_in 转换为 dim_hidden
         x_path = (x_path + x_path.mean(dim=1, keepdim=True)) * 0.5  # 使特征分布更加平滑，有助于训练稳定性
@@ -105,12 +108,31 @@ class PGBF(nn.Module):
         e_h = self.message_dropout(e_h)
         e_g = self.readout(e_h.squeeze(0), batch=None)
 
-        return e_g
+        return e_omic, e_g
 
 
 if __name__ == "__main__":
-    data = torch.randn((1, 10000, 384)).to(device)
-    print('input.shape:', data.shape)
-    model = PGBF(dim_in=384, dim_hidden=512).to(device)
-    output_path = model(data)
-    print('output_path.shape:', output_path.shape)
+    data_WSI = torch.randn((1, 10000, 384)).to(device)
+    data_omic1 = torch.randn(89).to(device)
+    data_omic2 = torch.randn(334).to(device)
+    data_omic3 = torch.randn(534).to(device)
+    data_omic4 = torch.randn(471).to(device)
+    data_omic5 = torch.randn(1510).to(device)
+    data_omic6 = torch.randn(482).to(device)
+    data_omic1 = data_omic1.type(torch.FloatTensor).to(device)
+    data_omic2 = data_omic2.type(torch.FloatTensor).to(device)
+    data_omic3 = data_omic3.type(torch.FloatTensor).to(device)
+    data_omic4 = data_omic4.type(torch.FloatTensor).to(device)
+    data_omic5 = data_omic5.type(torch.FloatTensor).to(device)
+    data_omic6 = data_omic6.type(torch.FloatTensor).to(device)
+    print('data_WSI.shape:', data_WSI.shape)
+    print('data_omic1.shape:', data_omic1.shape)
+    print('data_omic2.shape:', data_omic2.shape)
+    print('data_omic3.shape:', data_omic3.shape)
+    print('data_omic4.shape:', data_omic4.shape)
+    print('data_omic5.shape:', data_omic5.shape)
+    print('data_omic6.shape:', data_omic6.shape)
+    model = PGBF().to(device)
+    e_omic, e_g = model(x_path=data_WSI, x_omic1=data_omic1, x_omic2=data_omic2, x_omic3=data_omic3, x_omic4=data_omic4, x_omic5=data_omic5, x_omic6=data_omic6)
+    print('e_omic_bag.shape:', e_omic.shape)
+    print('e_g.shape:', e_g.shape)
