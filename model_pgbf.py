@@ -75,11 +75,13 @@ class PGBF(nn.Module):
 
         # 处理病理图像数据 生成graph的嵌入
         x_path = kwargs['x_path']
+        print('x_path.size(0):', x_path.size())  # [num_patch, 1024]
         # WiKG 公式1 每个补丁的嵌入投影为头部和尾部嵌入
-        x_path = self._fc1(x_path)  # 将维度从 dim_in 转换为 dim_hidden
+        x_path = self._fc1(x_path).unsqueeze(0)  # [1, num_patch, dim_hidden]
         x_path = (x_path + x_path.mean(dim=1, keepdim=True)) * 0.5  # 使特征分布更加平滑，有助于训练稳定性
-        e_h = self.W_head(x_path)  # embedding_head
-        e_t = self.W_tail(x_path)  # embedding_tail
+        e_h = self.W_head(x_path)  # embedding_head [num_patch, dim_hidden]
+        e_t = self.W_tail(x_path)  # embedding_tail [num_patch, dim_hidden]
+        print('e_h.size():', e_h.size(),';e_t.size():', e_t.size())
 
         # WiKG 公式2 3 相似性得分最高的前 k 个补丁被选为补丁 i 的邻居
         attn_logit = (e_h * self.scale) @ e_t.transpose(-2, -1)  # 计算 e_h 和 e_t 之间的相似性(点积)
@@ -106,14 +108,15 @@ class PGBF(nn.Module):
         bi_embedding = self.activation(self.linear2(e_h * e_Nh))
         e_h = sum_embedding + bi_embedding
         # WiKG 公式 9 生成 graph-level 嵌入 embedding_graph
-        e_h = self.message_dropout(e_h)
-        e_g = self.readout(e_h.squeeze(0), batch=None)  # [1, 512]
+        e_h = self.message_dropout(e_h) # [1, num_patch, dim_hidden]
+        e_g = self.readout(e_h.squeeze(0), batch=None)  # [1, dim_hidden]
 
-        return e_omic, e_g
+        return e_omic, e_h, e_g
 
 
 if __name__ == "__main__":
-    data_WSI = torch.randn((1, 10000, 384)).to(device)
+    # data_WSI = torch.randn((1, 10000, 384)).to(device)
+    data_WSI = torch.randn((6240, 1024)).to(device)
     data_omic1 = torch.randn(89).to(device)
     data_omic2 = torch.randn(334).to(device)
     data_omic3 = torch.randn(534).to(device)
@@ -126,7 +129,8 @@ if __name__ == "__main__":
     data_omic4 = data_omic4.type(torch.FloatTensor).to(device)
     data_omic5 = data_omic5.type(torch.FloatTensor).to(device)
     data_omic6 = data_omic6.type(torch.FloatTensor).to(device)
-    model = PGBF().to(device)
-    e_omic, e_g = model(x_path=data_WSI, x_omic1=data_omic1, x_omic2=data_omic2, x_omic3=data_omic3, x_omic4=data_omic4, x_omic5=data_omic5, x_omic6=data_omic6)
+    model = PGBF(dim_in=1024, dim_hidden=256).to(device)
+    e_omic, e_h, e_g = model(x_path=data_WSI, x_omic1=data_omic1, x_omic2=data_omic2, x_omic3=data_omic3, x_omic4=data_omic4, x_omic5=data_omic5, x_omic6=data_omic6)
     print('e_omic_bag.shape:', e_omic.shape)
+    print('e_h.shape:', e_h.shape)
     print('e_g.shape:', e_g.shape)

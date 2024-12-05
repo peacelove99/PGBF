@@ -11,6 +11,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch_geometric.nn import GlobalAttention
 
 from models.model_utils import *
 
@@ -20,7 +21,8 @@ from models.model_utils import *
 ###########################
 class MCAT_Surv(nn.Module):
     def __init__(self, fusion='concat', omic_sizes=[100, 200, 300, 400, 500, 600], n_classes=4,
-                 model_size_wsi: str='small', model_size_omic: str='small', dropout=0.25):
+                 model_size_wsi: str='small', model_size_omic: str='small', dropout=0.25,
+                 dim_in=1024, dim_hidden=256, topk=6):
         super(MCAT_Surv, self).__init__()
         self.fusion = fusion
         self.omic_sizes = omic_sizes
@@ -30,10 +32,30 @@ class MCAT_Surv(nn.Module):
         
         ### FC Layer over WSI bag
         size = self.size_dict_WSI[model_size_wsi]
-        fc = [nn.Linear(size[0], size[1]), nn.ReLU()]
-        fc.append(nn.Dropout(0.25))
+        fc = [nn.Linear(size[0], size[1]), nn.ReLU(), nn.Dropout(0.25)]
         self.wsi_net = nn.Sequential(*fc)
-        
+
+
+        ### construct graph WiKG
+        self._fc1 = nn.Sequential(nn.Linear(dim_in, dim_hidden), nn.LeakyReLU())
+
+        self.W_head = nn.Linear(dim_hidden, dim_hidden)
+        self.W_tail = nn.Linear(dim_hidden, dim_hidden)
+
+        self.scale = dim_hidden ** -0.5
+
+        self.topk = topk
+
+        self.linear1 = nn.Linear(dim_hidden, dim_hidden)
+        self.linear2 = nn.Linear(dim_hidden, dim_hidden)
+
+        self.activation = nn.LeakyReLU()
+
+        self.message_dropout = nn.Dropout(dropout)
+
+        att_net = nn.Sequential(nn.Linear(dim_hidden, dim_hidden // 2), nn.LeakyReLU(), nn.Linear(dim_hidden // 2, 1))
+        self.readout = GlobalAttention(att_net)
+
         ### Constructing Genomic SNN
         hidden = self.size_dict_omic[model_size_omic]
         sig_networks = []
@@ -73,14 +95,53 @@ class MCAT_Surv(nn.Module):
     def forward(self, **kwargs):
         x_path = kwargs['x_path'] # (num_patch, 1024)
         x_omic = [kwargs['x_omic%d' % i] for i in range(1,7)] 
-        
+
+        # print('x_path.size(0):',x_path.size())
         h_path_bag = self.wsi_net(x_path).unsqueeze(1) ### path embeddings are fed through a FC layer
-        h_omic = [self.sig_networks[idx].forward(sig_feat) for idx, sig_feat in enumerate(x_omic)] ### each omic signature goes through it's own FC layer   
+
+        # 处理病理图像数据 生成graph的嵌入
+        # WiKG 公式1 每个补丁的嵌入投影为头部和尾部嵌入
+        x_path = self._fc1(x_path).unsqueeze(0)  # [1, num_patch, dim_hidden]
+        x_path = (x_path + x_path.mean(dim=1, keepdim=True)) * 0.5  # 使特征分布更加平滑，有助于训练稳定性
+        e_h = self.W_head(x_path)  # embedding_head [num_patch, dim_hidden]
+        e_t = self.W_tail(x_path)  # embedding_tail [num_patch, dim_hidden]
+        # print('e_h.size():', e_h.size(), ';e_t.size():', e_t.size())
+
+        # WiKG 公式2 3 相似性得分最高的前 k 个补丁被选为补丁 i 的邻居
+        attn_logit = (e_h * self.scale) @ e_t.transpose(-2, -1)  # 计算 e_h 和 e_t 之间的相似性(点积)
+        topk_weight, topk_index = torch.topk(attn_logit, k=self.topk, dim=-1)  # 获取 Top - k 注意力分数和对应索引
+        topk_prob = F.softmax(topk_weight, dim=2)  # 归一化注意力分数
+
+        topk_index = topk_index.to(torch.long)  # 转换索引类型
+        topk_index_expanded = topk_index.expand(e_t.size(0), -1, -1)  # 扩展索引以匹配 e_t 维度
+        batch_indices = torch.arange(e_t.size(0)).view(-1, 1, 1).to(topk_index.device)  # 创建批次索引辅助张量
+        Nb_h = e_t[batch_indices, topk_index_expanded, :]  # 使用索引从 e_t 中提取特征向量 neighbors_head
+
+        # WiKG 公式 4 为有向边分配嵌入 embedding head_r
+        eh_r = torch.mul(topk_prob.unsqueeze(-1), Nb_h) + torch.matmul((1 - topk_prob).unsqueeze(-1), e_h.unsqueeze(2))
+        # WiKG 公式 6 计算 加权因子
+        e_h_expand = e_h.unsqueeze(2).expand(-1, -1, self.topk, -1)
+        gate = torch.tanh(e_h_expand + eh_r)
+        ka_weight = torch.einsum('ijkl,ijkm->ijk', Nb_h, gate)
+        # WiKG 公式 7 对 加权因子 进行归一化
+        ka_prob = F.softmax(ka_weight, dim=2).unsqueeze(dim=2)
+        # WiKG 公式 5 计算补丁 i 相邻 N （i） 的尾部嵌入的线性组合
+        e_Nh = torch.matmul(ka_prob, Nb_h).squeeze(dim=2)
+        # WiKG 公式 8 将聚合的邻居信息 e_Nh 与原始 head 融合
+        sum_embedding = self.activation(self.linear1(e_h + e_Nh))
+        bi_embedding = self.activation(self.linear2(e_h * e_Nh))
+        e_h = sum_embedding + bi_embedding
+        # WiKG 公式 9 生成 graph-level 嵌入 embedding_graph
+        e_h = self.message_dropout(e_h)
+        e_g = self.readout(e_h.squeeze(0), batch=None)  # [1, 512]
+
+        h_omic = [self.sig_networks[idx].forward(sig_feat) for idx, sig_feat in enumerate(x_omic)] ### each omic signature goes through it's own FC layer
         h_omic_bag = torch.stack(h_omic).unsqueeze(1) ### omic embeddings are stacked (to be used in co-attention)
         # print("h_omic_bag", h_omic_bag.shape)
 
         # Coattn  h_path_bag：[3279, 1, 256] h_omic_bag:[6, 1, 256]
-        h_path_coattn, A_coattn = self.coattn(h_omic_bag, h_path_bag, h_path_bag)
+        # h_path_coattn, A_coattn = self.coattn(h_omic_bag, h_path_bag, h_path_bag)
+        h_path_coattn, A_coattn = self.coattn(h_omic_bag, e_g, e_g)
 
         ### Path
         h_path_trans = self.path_transformer(h_path_coattn)

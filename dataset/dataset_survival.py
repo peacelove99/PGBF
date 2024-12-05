@@ -295,7 +295,8 @@ class Generic_MIL_Survival_Dataset(Generic_WSI_Survival_Dataset):
                     path_features = []
                     for slide_id in slide_ids:
                         wsi_path = os.path.join(data_dir, 'pt_files', '{}.pt'.format(slide_id.rstrip('.svs')))
-                        wsi_bag = torch.load(wsi_path,map_location=torch.device('cpu'))
+                        # wsi_bag = torch.load(wsi_path,map_location=torch.device('cpu'))
+                        wsi_bag = torch.load(wsi_path,map_location=torch.device('cpu'), weights_only=True)
                         path_features.append(wsi_bag)
                     path_features = torch.cat(path_features, dim=0)
                     omic1 = torch.tensor(self.genomic_features[self.omic_names[0]].iloc[idx].values)

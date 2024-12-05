@@ -7,6 +7,8 @@ import torch
 from dataset.dataset_generic import save_splits
 from utils.utils import get_optim, get_split_loader
 
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
 
 class EarlyStopping:
     """Early stops the training if validation loss doesn't improve after a given patience."""
@@ -174,7 +176,7 @@ def train(datasets: tuple, cur: int, args: Namespace):
     if hasattr(model, "relocate"):
         model.relocate()
     else:
-        model = model.cuda()
+        model = model.to(device)
     
     if args.load_model:
         model.load_state_dict(torch.load(args.path_load_model))

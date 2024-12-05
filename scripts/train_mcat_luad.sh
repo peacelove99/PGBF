@@ -1,4 +1,4 @@
-CUDA_VISIBLE_DEVICES=0 python main.py \
+CUDA_VISIBLE_DEVICES=2 python main.py \
 --data_root_dir /home/cvnlp/WSI_DATA/TCGA_LUAD_feature \
 --split_dir tcga_luad \
 --model_type mcat \
