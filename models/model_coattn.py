@@ -35,24 +35,16 @@ class MCAT_Surv(nn.Module):
         fc = [nn.Linear(size[0], size[1]), nn.ReLU(), nn.Dropout(0.25)]
         self.wsi_net = nn.Sequential(*fc)
 
-
         ### construct graph WiKG
         self._fc1 = nn.Sequential(nn.Linear(dim_in, dim_hidden), nn.LeakyReLU())
-
         self.W_head = nn.Linear(dim_hidden, dim_hidden)
         self.W_tail = nn.Linear(dim_hidden, dim_hidden)
-
         self.scale = dim_hidden ** -0.5
-
         self.topk = topk
-
         self.linear1 = nn.Linear(dim_hidden, dim_hidden)
         self.linear2 = nn.Linear(dim_hidden, dim_hidden)
-
         self.activation = nn.LeakyReLU()
-
         self.message_dropout = nn.Dropout(dropout)
-
         att_net = nn.Sequential(nn.Linear(dim_hidden, dim_hidden // 2), nn.LeakyReLU(), nn.Linear(dim_hidden // 2, 1))
         self.readout = GlobalAttention(att_net)
 
