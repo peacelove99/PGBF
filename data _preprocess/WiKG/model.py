@@ -44,8 +44,7 @@ class WiKG(nn.Module):
         elif pool == "max":
             self.readout = global_max_pool
         elif pool == "attn":
-            att_net = nn.Sequential(nn.Linear(dim_hidden, dim_hidden // 2), nn.LeakyReLU(),
-                                    nn.Linear(dim_hidden // 2, 1))
+            att_net = nn.Sequential(nn.Linear(dim_hidden, dim_hidden // 2), nn.LeakyReLU(), nn.Linear(dim_hidden // 2, 1))
             self.readout = GlobalAttention(att_net)
 
     def forward(self, x):
